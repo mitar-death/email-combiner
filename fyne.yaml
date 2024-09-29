@@ -1,0 +1,8 @@
+# fyne.yaml
+bundle:
+  identifier: com.example.datamergepro
+  name: DataMerge Pro
+  icon: ./resources/baboon.png
+  version: "1.0.0"
+  author: "Your Name"
+  copyright:

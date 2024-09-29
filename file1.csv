@@ -1,4 +1,0 @@
-name,organization_name,email,city,state,country,phone_numbers/0/dialer_flags,phone_numbers/0/dialer_flags/country_enabled,phone_numbers/0/dialer_flags/country_name,phone_numbers/0/dialer_flags/high_risk_calling_enabled,phone_numbers/0/dialer_flags/potential_high_risk_number,phone_numbers/0/dnc_other_info,phone_numbers/0/dnc_status,phone_numbers/0/position,phone_numbers/0/raw_number,phone_numbers/0/sanitized_number,phone_numbers/0/status,phone_numbers/0/type
-Theo H,PhotoActive,theo.hand@cc.com,Oakland,California,United States,,,,,,,,,,,,
-Zycleo Dishmon,36ixty Visuals,cleo@36ixtyvisuals.com,Houston,Texas,United States,,TRUE,United States,FALSE,FALSE,,,0,18326748194,18326748194,no_status,work_hq
-Colleen O'Toole,Lighthouse Transportation Inc.,colleen@lighthousetransport.com,,,Canada,,TRUE,Canada,FALSE,FALSE,,,0,+1 902-468-3696,19024683696,no_status,work_hq

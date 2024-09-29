@@ -1,4 +1,0 @@
-email,name,organization_name,phone_numbers/0/dialer_flags,phone_numbers/0/dialer_flags/country_enabled,phone_numbers/0/dialer_flags/country_name,phone_numbers/0/dialer_flags/high_risk_calling_enabled,phone_numbers/0/dialer_flags/potential_high_risk_number,phone_numbers/0/dnc_other_info,phone_numbers/0/dnc_status,phone_numbers/0/position,phone_numbers/0/raw_number,phone_numbers/0/sanitized_number,phone_numbers/0/status,phone_numbers/0/type,state,city,country
-bryce@fitbodybootcamp.com,Bryce H,Fit Body Boot Camp,,,,,,,,0,+1 888-638-3222,18886383222,no_status,work_hq,California,Los Angeles,United States
-dennis@ez-robot.com,Dennis Kambeitz,EZ-Robot,,,,,,,,0,+1 888-346-4333,18883464333,no_status,work_hq,Alberta,Calgary,Canada
-radek.kanovsky@raveo.cz,Radek Kanovsky,RAVEO s.r.o.,,TRUE,Czech Republic,FALSE,FALSE,,,0,+420 577 700 150,4.20578E+11,no_status,work_hq,Zlin Region,Zlin,Czech Republic
