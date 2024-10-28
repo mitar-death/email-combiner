@@ -46,9 +46,3 @@ email-combiner/ ├── combine/ │ └── combine.go ├── filter/ �
 ## 📄 License
 
 [MIT](./LICENSE)
-
-## 👤 Author
-
-**Your Name**  
-[Your Email](mailto:your.email@example.com)  
-[Your Website](https://yourwebsite.com)

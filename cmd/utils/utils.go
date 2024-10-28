@@ -2,8 +2,8 @@ package utils
 
 import (
 	"errors"
-	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 
@@ -21,6 +21,15 @@ var Logger *log.Logger
 var LogMessages []string
 var LogMutex sync.Mutex
 
+func InitializeLogger(logFilePath string) error {
+	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	if err != nil {
+		return err
+	}
+	Logger = log.New(logFile, "", log.Ldate|log.Ltime)
+	return nil
+}
+
 // Helper functions
 func ShowError(err error, win fyne.Window) {
 	dialog.ShowError(err, win)
@@ -37,7 +46,6 @@ func LogMessage(message string) {
 		Logger.Println(message)
 	}
 	LogMessages = append(LogMessages, message)
-	fmt.Println(message)
 }
 
 func ShowFolderSelectionDialog(pathEntry *widget.Entry, win fyne.Window) {
@@ -96,4 +104,17 @@ func ShowFileSelectionDialog(selectedFiles *[]string, inputPathEntry *widget.Ent
 		}
 	}, win)
 	fileDialog.Show()
+}
+
+func TruncateString(s string, length int) string {
+	if len(s) > length {
+		return s[:length] + "..."
+	}
+	return s
+}
+
+func DisplayHeadersInList(headerDisplay *widget.Entry, headers []string) {
+	headerText := strings.Join(headers, ", ")
+	headerText = strings.ToTitle(headerText)
+	headerDisplay.SetText(headerText)
 }

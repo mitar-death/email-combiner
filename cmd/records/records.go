@@ -3,6 +3,7 @@ package records
 import (
 	"encoding/csv"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -300,6 +301,29 @@ func WriteFilteredCSV(filename string, headers []string, records []Record) error
 	return nil
 }
 
+// AppendCSV appends records to an existing CSV file
+func AppendCSV(filename string, recordsMap map[string]Record) error {
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Append records
+	for _, record := range recordsMap {
+		row := append([]string{record.Name, record.OrgName, record.Email}, record.Others...)
+		err = writer.Write(row)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func LoadEmailsFromCSV(filename string) (map[string]bool, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -334,6 +358,16 @@ func LoadEmailsFromCSV(filename string) (map[string]bool, error) {
 	}
 
 	return emails, nil
+}
+
+func ValidateHeaders(headers []string) bool {
+	requiredHeaders := []string{"Name", "Email"}
+	for _, reqHeader := range requiredHeaders {
+		if findFlexibleHeaderIndex(headers, reqHeader) == -1 {
+			return false
+		}
+	}
+	return true
 }
 
 func findFlexibleHeaderIndex(headers []string, keyword string) int {
@@ -375,12 +409,85 @@ func excludeColumns(row []string, excludeIndexes []int) []string {
 	return others
 }
 
+func GetCSVHeaders(filePath string) ([]string, error) {
+
+	file, err := os.Open(filePath)
+
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+
+	headers, err := reader.Read()
+
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	log.Printf("Headers: %v", headers)
+	return headers, nil
+
+}
+
 func getRowData(row *xlsx.Row) []string {
 	var data []string
 	for _, cell := range row.Cells {
 		data = append(data, cell.String())
 	}
 	return data
+}
+
+// GetHeaders reads the headers from a CSV or XLSX file
+func GetHeaders(filename string) ([]string, error) {
+	ext := strings.ToLower(filepath.Ext(filename))
+	if ext == ".csv" {
+		return getHeadersFromCSV(filename)
+	} else if ext == ".xlsx" {
+		return getHeadersFromXLSX(filename)
+	}
+	return nil, fmt.Errorf("unsupported file type: %s", ext)
+}
+
+func getHeadersFromCSV(filename string) ([]string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.LazyQuotes = true
+	reader.FieldsPerRecord = -1
+
+	row, err := reader.Read() // Read only the first line
+	if err != nil {
+		return nil, err
+	}
+
+	headers := sanitizeHeaders(row)
+	return headers, nil
+}
+
+func getHeadersFromXLSX(filename string) ([]string, error) {
+	file, err := xlsx.OpenFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, sheet := range file.Sheets {
+		if len(sheet.Rows) > 0 {
+			headers := sanitizeHeadersXLSX(sheet.Rows[0].Cells)
+			return headers, nil
+		}
+	}
+	return nil, fmt.Errorf("no headers found in XLSX file")
 }
 
 func getRowDataExcluding(row *xlsx.Row, excludeIndexes []int) []string {
