@@ -13,10 +13,12 @@ import (
 )
 
 type Record struct {
-	Name    string
-	OrgName string
-	Email   string
-	Others  []string
+	Name      string
+	OrgName   string
+	Email     string
+	Others    []string
+	OthersMap map[string]string // Map headers to values
+	FilePath  string
 }
 
 // Load records from CSV or XLSX file
@@ -69,19 +71,38 @@ func loadRecordsFromCSV(filename string) ([]Record, []string, error) {
 			// Skip rows that don't have enough columns
 			continue
 		}
-		email := row[emailIndex]
-		name := row[nameIndex]
+
+		// Map headers to values
+		rowMap := make(map[string]string)
+		for i, header := range headers {
+			if i < len(row) {
+				rowMap[header] = row[i]
+			} else {
+				rowMap[header] = ""
+			}
+		}
+
+		email := rowMap[headers[emailIndex]]
+		name := rowMap[headers[nameIndex]]
 		orgName := ""
-		if orgNameIndex != -1 && len(row) > orgNameIndex {
-			orgName = row[orgNameIndex]
+		if orgNameIndex != -1 {
+			orgName = rowMap[headers[orgNameIndex]]
+		}
+
+		// Remove standard fields from OthersMap
+		delete(rowMap, headers[nameIndex])
+		delete(rowMap, headers[emailIndex])
+		if orgNameIndex != -1 {
+			delete(rowMap, headers[orgNameIndex])
 		}
 
 		// Collect the record
 		records = append(records, Record{
-			Name:    name,
-			OrgName: orgName,
-			Email:   email,
-			Others:  row,
+			Name:      name,
+			OrgName:   orgName,
+			Email:     email,
+			OthersMap: rowMap,
+			FilePath:  filename,
 		})
 	}
 
@@ -119,21 +140,41 @@ func loadRecordsFromXLSX(filename string) ([]Record, []string, error) {
 				// Skip rows that don't have enough columns
 				continue
 			}
-			email := row.Cells[emailIndex].String()
-			name := row.Cells[nameIndex].String()
+
+			// Map headers to values
+			rowMap := make(map[string]string)
+			for i, header := range headers {
+				if i < len(row.Cells) {
+					rowMap[header] = row.Cells[i].String()
+				} else {
+					rowMap[header] = ""
+				}
+			}
+
+			email := rowMap[headers[emailIndex]]
+			name := rowMap[headers[nameIndex]]
 			orgName := ""
-			if orgNameIndex != -1 && len(row.Cells) > orgNameIndex {
-				orgName = row.Cells[orgNameIndex].String()
+			if orgNameIndex != -1 {
+				orgName = rowMap[headers[orgNameIndex]]
+			}
+
+			// Remove standard fields from OthersMap
+			delete(rowMap, headers[nameIndex])
+			delete(rowMap, headers[emailIndex])
+			if orgNameIndex != -1 {
+				delete(rowMap, headers[orgNameIndex])
 			}
 
 			// Collect the record
 			records = append(records, Record{
-				Name:    name,
-				OrgName: orgName,
-				Email:   email,
-				Others:  getRowData(row),
+				Name:      name,
+				OrgName:   orgName,
+				Email:     email,
+				OthersMap: rowMap,
+				FilePath:  filename,
 			})
 		}
+
 	}
 
 	return records, headers, nil
@@ -292,13 +333,44 @@ func WriteFilteredCSV(filename string, headers []string, records []Record) error
 
 	// Write records
 	for _, record := range records {
-		err = writer.Write(record.Others)
+		// Map field names to values
+		recordMap := map[string]string{
+			"Name":    record.Name,
+			"OrgName": record.OrgName,
+			"Email":   record.Email,
+		}
+
+		// Merge with OthersMap
+		for k, v := range record.OthersMap {
+			recordMap[k] = v
+		}
+
+		// Prepare the row data based on headers
+		var row []string
+		for _, header := range headers {
+			if val, ok := recordMap[header]; ok {
+				row = append(row, val)
+			} else {
+				// Header not found in record, append empty string
+				row = append(row, "")
+			}
+		}
+
+		err = writer.Write(row)
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+func containsString(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 // AppendCSV appends records to an existing CSV file

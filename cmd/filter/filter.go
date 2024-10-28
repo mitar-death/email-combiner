@@ -273,6 +273,15 @@ func createStartButton(selectedInputFiles *[]string, databaseFilePath *string, o
 					fileName := strings.TrimSuffix(filepath.Base(inputFile), filepath.Ext(inputFile))
 					outputFilePath = filepath.Join(outputFolder, fmt.Sprintf("%s_filtered_output.csv", fileName))
 				}
+
+				//if the inputPaths are a directory, the output file will be named "filtered_output.csv"
+				if len(*selectedInputFiles) == 1 {
+					fileInfo, err := os.Stat((*selectedInputFiles)[0])
+					fileName := filepath.Base((*selectedInputFiles)[0])
+					if err == nil && fileInfo.IsDir() {
+						outputFilePath = filepath.Join(outputFolder, fmt.Sprintf("%s_filtered_output.csv", fileName))
+					}
+				}
 			}
 			// Open the log file for writing
 			logFilePath := filepath.Join(filepath.Dir(outputFilePath), "process_log.txt")
