@@ -364,14 +364,6 @@ func WriteFilteredCSV(filename string, headers []string, records []Record) error
 
 	return nil
 }
-func containsString(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
-}
 
 // AppendCSV appends records to an existing CSV file
 func AppendCSV(filename string, recordsMap map[string]Record) error {

@@ -2,6 +2,7 @@ package filter
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -273,23 +274,19 @@ func createStartButton(selectedInputFiles *[]string, databaseFilePath *string, o
 					fileName := strings.TrimSuffix(filepath.Base(inputFile), filepath.Ext(inputFile))
 					outputFilePath = filepath.Join(outputFolder, fmt.Sprintf("%s_filtered_output.csv", fileName))
 				}
-
-				//if the inputPaths are a directory, the output file will be named "filtered_output.csv"
-				if len(*selectedInputFiles) == 1 {
-					fileInfo, err := os.Stat((*selectedInputFiles)[0])
-					fileName := filepath.Base((*selectedInputFiles)[0])
-					if err == nil && fileInfo.IsDir() {
-						outputFilePath = filepath.Join(outputFolder, fmt.Sprintf("%s_filtered_output.csv", fileName))
-					}
-				}
 			}
 			// Open the log file for writing
 			logFilePath := filepath.Join(filepath.Dir(outputFilePath), "process_log.txt")
-			err := utils.InitializeLogger(logFilePath)
+			logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 			if err != nil {
 				utils.ShowError(fmt.Errorf("Failed to open log file: %v", err), myWindow)
 				return
 			}
+			defer logFile.Close()
+
+			// Set up the logger to write to the log file
+			utils.Logger = log.New(logFile, "", log.Ldate|log.Ltime)
+
 			// Perform filtering
 			err = filterEmails(*selectedInputFiles, *databaseFilePath, outputFilePath)
 			if err != nil {
@@ -390,7 +387,7 @@ func filterEmails(inputPaths []string, databaseFilePath, outputFilePath string) 
 	var filteredRecords []records.Record
 	utils.LogMessage(fmt.Sprintf("Filtering records based on database file: %s", databaseFilePath))
 	for _, record := range inputRecords {
-
+		utils.LogMessage(fmt.Sprintf("Processing record: %s", record.Email))
 		if !dbEmails[record.Email] {
 			filteredRecords = append(filteredRecords, record)
 		}
@@ -405,7 +402,7 @@ func filterEmails(inputPaths []string, databaseFilePath, outputFilePath string) 
 		return fmt.Errorf("failed to write output file: %v", err)
 	}
 
-	utils.LogMessage("Filtering completed successfully")
+	utils.LogMessage(fmt.Sprint("Email filtering completed successfully!"))
 
 	return nil
 }
