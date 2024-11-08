@@ -395,7 +395,7 @@ func filterEmails(inputPaths []string, databaseFilePath, outputFilePath string) 
 
 	utils.LogMessage(fmt.Sprintf("Filtered %d records based on database file", len(filteredRecords)))
 	// Write output file
-	headers := []string{"Name", "Email", "Company Name"} // Replace with actual headers if different
+	headers := []string{"Name", "Email", "OrgName"} // Replace with actual headers if different
 	err = records.WriteFilteredCSV(outputFilePath, headers, filteredRecords)
 	utils.LogMessage(fmt.Sprintf("Wrote %d records to output file: %s", len(filteredRecords), outputFilePath))
 	if err != nil {

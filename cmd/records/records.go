@@ -17,7 +17,7 @@ type Record struct {
 	OrgName   string
 	Email     string
 	Others    []string
-	OthersMap map[string]string // Map headers to values
+	OthersMap map[string]string
 	FilePath  string
 }
 
@@ -127,7 +127,7 @@ func loadRecordsFromXLSX(filename string) ([]Record, []string, error) {
 		// Find the required column indexes dynamically using flexible matching
 		emailIndex := findFlexibleHeaderIndex(headers, "email")
 		nameIndex := findFlexibleHeaderIndex(headers, "name")
-		orgNameIndex := findFlexibleHeaderIndex(headers, "organization") // Optional
+		orgNameIndex := findFlexibleHeaderIndex(headers, "organization_name") // Optional
 
 		// Skip files if required columns are not found
 		if emailIndex == -1 || nameIndex == -1 {
@@ -330,7 +330,6 @@ func WriteFilteredCSV(filename string, headers []string, records []Record) error
 	if err != nil {
 		return err
 	}
-
 	// Write records
 	for _, record := range records {
 		// Map field names to values
@@ -342,6 +341,7 @@ func WriteFilteredCSV(filename string, headers []string, records []Record) error
 
 		// Merge with OthersMap
 		for k, v := range record.OthersMap {
+			fmt.Printf("k: %s, v: %s", k, v)
 			recordMap[k] = v
 		}
 
@@ -355,6 +355,8 @@ func WriteFilteredCSV(filename string, headers []string, records []Record) error
 				row = append(row, "")
 			}
 		}
+
+		fmt.Printf("Final row data: %v", row)
 
 		err = writer.Write(row)
 		if err != nil {
