@@ -127,7 +127,7 @@ func loadRecordsFromXLSX(filename string) ([]Record, []string, error) {
 		// Find the required column indexes dynamically using flexible matching
 		emailIndex := findFlexibleHeaderIndex(headers, "email")
 		nameIndex := findFlexibleHeaderIndex(headers, "name")
-		orgNameIndex := findFlexibleHeaderIndex(headers, "organization_name") // Optional
+		orgNameIndex := findFlexibleHeaderIndex(headers, "organization") // Optional
 
 		// Skip files if required columns are not found
 		if emailIndex == -1 || nameIndex == -1 {
