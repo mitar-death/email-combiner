@@ -11,6 +11,11 @@ import (
 )
 
 func main() {
+
+	// if err := agent.Listen(agent.Options{}); err != nil {
+	// 	log.Fatal(err)
+	// }
+
 	// Create the GUI application
 	myApp := app.New()
 	myWindow := myApp.NewWindow("DataMerge Pro")
@@ -50,4 +55,5 @@ func main() {
 	myWindow.SetContent(mainContainer)
 	myWindow.Resize(fyne.NewSize(800, 700))
 	myWindow.ShowAndRun()
+
 }

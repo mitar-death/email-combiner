@@ -2,43 +2,58 @@ package utils
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 )
 
-// Global variables to store the last used directories
-var LastFileDirectory fyne.ListableURI
-var LastFolderDirectory fyne.ListableURI
+// Logger and Log Management
+var (
+	Logger      *log.Logger
+	LogMessages []string
+	LogMutex    sync.Mutex
+)
 
-var Logger *log.Logger
-var LogMessages []string
-var LogMutex sync.Mutex
-
+// InitializeLogger sets up the logger to write to a specified file.
 func InitializeLogger(logFilePath string) error {
+	logDir := filepath.Dir(logFilePath)
+	if _, err := os.Stat(logDir); os.IsNotExist(err) {
+		err = os.MkdirAll(logDir, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("failed to create log directory: %v", err)
+		}
+	}
+
 	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open log file: %v", err)
 	}
 	Logger = log.New(logFile, "", log.Ldate|log.Ltime)
 	return nil
 }
 
-// Helper functions
+// ShowError displays an error dialog.
 func ShowError(err error, win fyne.Window) {
-	dialog.ShowError(err, win)
+	if err != nil && win != nil {
+		dialog.ShowError(err, win)
+	}
 }
 
+// ShowInfo displays an information dialog.
 func ShowInfo(message string, win fyne.Window) {
-	dialog.ShowInformation("Info", message, win)
+	if win != nil {
+		dialog.ShowInformation("Info", message, win)
+	}
 }
 
+// LogMessage logs a message to both the logger and the in-memory log.
 func LogMessage(message string) {
 	LogMutex.Lock()
 	defer LogMutex.Unlock()
@@ -48,8 +63,13 @@ func LogMessage(message string) {
 	LogMessages = append(LogMessages, message)
 }
 
+// ShowFolderSelectionDialog displays a folder selection dialog and updates the path entry.
 func ShowFolderSelectionDialog(pathEntry *widget.Entry, win fyne.Window) {
-	folderDialog := dialog.NewFolderOpen(func(uri fyne.ListableURI, err error) {
+	if pathEntry == nil || win == nil {
+		return
+	}
+
+	dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
 		if err != nil {
 			ShowError(err, win)
 			return
@@ -58,54 +78,52 @@ func ShowFolderSelectionDialog(pathEntry *widget.Entry, win fyne.Window) {
 			pathEntry.SetText(uri.Path())
 		}
 	}, win)
-	folderDialog.SetFilter(storage.NewExtensionFileFilter([]string{}))
-
-	// Reset the location to force refresh
-	folderDialog.SetLocation(nil)
-
-	folderDialog.Show()
 }
 
+// ShowFileOpenDialog displays a file open dialog for selecting a single file.
 func ShowFileOpenDialog(filePath *string, fileEntry *widget.Entry, win fyne.Window) {
-	fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+	if filePath == nil || fileEntry == nil || win == nil {
+		return
+	}
+
+	dialog.ShowFileOpen(func(reader fyne.URIReadCloser, err error) {
 		if err != nil {
 			ShowError(err, win)
 			return
 		}
 		if reader != nil {
+			defer reader.Close()
 			ext := strings.ToLower(reader.URI().Extension())
 			if ext == ".csv" || ext == ".xlsx" {
 				*filePath = reader.URI().Path()
 				fileEntry.SetText(*filePath)
-				reader.Close()
 			} else {
-				ShowError(errors.New("Unsupported file type selected"), win)
+				ShowError(errors.New("unsupported file type selected"), win)
 			}
 		}
 	}, win)
-	fileDialog.SetFilter(storage.NewExtensionFileFilter([]string{".csv", ".xlsx"}))
-
-	// Reset the location to force refresh
-	fileDialog.SetLocation(nil)
-
-	fileDialog.Show()
 }
 
+// ShowFileSelectionDialog displays a file selection dialog for selecting multiple files.
 func ShowFileSelectionDialog(selectedFiles *[]string, inputPathEntry *widget.Entry, win fyne.Window) {
-	fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+	if selectedFiles == nil || inputPathEntry == nil || win == nil {
+		return
+	}
+
+	dialog.ShowFileOpen(func(reader fyne.URIReadCloser, err error) {
 		if err != nil {
 			ShowError(err, win)
 			return
 		}
 		if reader != nil {
+			defer reader.Close()
 			*selectedFiles = append(*selectedFiles, reader.URI().Path())
 			inputPathEntry.SetText(strings.Join(*selectedFiles, "\n"))
-			reader.Close()
 		}
 	}, win)
-	fileDialog.Show()
 }
 
+// TruncateString truncates a string to a specified length, adding "..." if it exceeds that length.
 func TruncateString(s string, length int) string {
 	if len(s) > length {
 		return s[:length] + "..."
@@ -113,8 +131,11 @@ func TruncateString(s string, length int) string {
 	return s
 }
 
+// DisplayHeadersInList displays headers in a text entry widget.
 func DisplayHeadersInList(headerDisplay *widget.Entry, headers []string) {
-	headerText := strings.Join(headers, ", ")
-	headerText = strings.ToTitle(headerText)
-	headerDisplay.SetText(headerText)
+	if headerDisplay != nil {
+		headerText := strings.Join(headers, ", ")
+		headerText = strings.Title(headerText)
+		headerDisplay.SetText(headerText)
+	}
 }

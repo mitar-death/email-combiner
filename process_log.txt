@@ -1,2 +1,7 @@
-2024/10/28 16:28:55 Loaded 4064 emails from database file
-2024/10/28 16:28:55 Loading records from file: /Users/mazibuckler/Downloads/import-employees-template_filtered_output.csv
+2024/11/13 03:59:31 Loaded 298490 emails from database file
+2024/11/13 03:59:31 Loading records from file: /Users/mazibuckler/Documents/Apollo B/dataset_apollo-scraper_2024-10-27_02-52-17-349.csv
+2024/11/13 03:59:31 Loaded 2552 records from file: /Users/mazibuckler/Documents/Apollo B/dataset_apollo-scraper_2024-10-27_02-52-17-349.csv
+2024/11/13 03:59:31 Filtering records based on database emails
+2024/11/13 03:59:31 Filtered 1489 records from 2552 input records
+2024/11/13 03:59:31 Wrote 1489 records to output file: /Users/mazibuckler/Downloads/dataset_apollo-scraper_2024-09-29_02-46-57-912_filtered_output.csv
+2024/11/13 03:59:31 Email filtering completed successfully!

@@ -2,11 +2,9 @@ package combine
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"website-copier/cmd/records"
@@ -20,23 +18,21 @@ import (
 )
 
 func CreateCombineScreen(myWindow fyne.Window) fyne.CanvasObject {
-	// Variable to store selected files
+	// Variables to store selected files
 	var selectedFiles []string
 
 	// Create Input Selection Widgets
 	inputPathEntry := createInputPathEntry()
-	selectFolderBtn, selectFileBtn, clearFilesBtn := createInputButtons(inputPathEntry, &selectedFiles)
+	selectFolderBtn, selectFileBtn, clearFilesBtn := createInputButtons(inputPathEntry, &selectedFiles, myWindow)
 
 	// Create Output Selection Widgets
-	outputPathEntry, _, outputFileNameEntry, outputFileEntry, outputOptionRadio, outputOptionsContainer := createOutputWidgets()
+	outputOptionRadio, outputOptionsContainer := createOutputWidgets()
 
 	// Create Start Button
 	startBtn := createStartButton(
 		inputPathEntry,
-		outputPathEntry,
-		outputFileNameEntry,
-		outputFileEntry,
 		outputOptionRadio,
+		outputOptionsContainer,
 		&selectedFiles,
 		myWindow,
 	)
@@ -71,7 +67,7 @@ func createInputPathEntry() *widget.Entry {
 }
 
 // createInputButtons creates the buttons for selecting folders and files, and clearing the selection
-func createInputButtons(inputPathEntry *widget.Entry, selectedFiles *[]string) (*widget.Button, *widget.Button, *widget.Button) {
+func createInputButtons(inputPathEntry *widget.Entry, selectedFiles *[]string, myWindow fyne.Window) (*widget.Button, *widget.Button, *widget.Button) {
 	selectFolderBtn := widget.NewButton("Select Folder", func() {
 		folderPath, err := dialog.Directory().Title("Select Input Folder").Browse()
 		if err != nil {
@@ -80,7 +76,7 @@ func createInputButtons(inputPathEntry *widget.Entry, selectedFiles *[]string) (
 		inputPathEntry.SetText(folderPath)
 	})
 
-	selectFileBtn := widget.NewButton("Add File", func() {
+	selectFileBtn := widget.NewButton("Add Files", func() {
 		for {
 			file, err := dialog.File().Title("Select Files").Filter("CSV and XLSX Files", "csv", "xlsx").Load()
 			if err != nil {
@@ -99,274 +95,285 @@ func createInputButtons(inputPathEntry *widget.Entry, selectedFiles *[]string) (
 	return selectFolderBtn, selectFileBtn, clearFilesBtn
 }
 
-// createOutputWidgets creates the output selection widgets with a toggle between existing CSV file and folder path with filename
-func createOutputWidgets() (*widget.Entry, *widget.Button, *widget.Entry, *widget.Entry, *widget.RadioGroup, *fyne.Container) {
-	// Output Option RadioGroup
+// createOutputWidgets creates the output selection widgets with options
+func createOutputWidgets() (*widget.RadioGroup, *fyne.Container) {
 	outputOptions := []string{"Select Existing CSV File", "Specify Output Folder and Filename"}
 	outputOptionRadio := widget.NewRadioGroup(outputOptions, nil)
 	outputOptionRadio.SetSelected("Specify Output Folder and Filename") // Default selection
 
-	// Widgets for "Select Existing CSV File" option
-	outputFileEntry := widget.NewEntry()
-	outputFileEntry.SetPlaceHolder("No output file selected")
-	selectOutputFileBtn := widget.NewButton("Select Output File", func() {
-		filePath, err := dialog.File().Title("Select Output CSV File").Filter("CSV Files", "csv").Load()
-		if err != nil {
-			return // User cancelled or an error occurred
-		}
-		outputFileEntry.SetText(filePath)
-	})
-
-	// Widgets for "Specify Output Folder and Filename" option
-	outputPathEntry := widget.NewEntry()
-	outputPathEntry.SetPlaceHolder("No output folder selected")
-	selectOutputFolderBtn := widget.NewButton("Select Output Folder", func() {
-		folderPath, err := dialog.Directory().Title("Select Output Folder").Browse()
-		if err != nil {
-			return // User cancelled or an error occurred
-		}
-		outputPathEntry.SetText(folderPath)
-	})
-	outputFileNameEntry := widget.NewEntry()
-	outputFileNameEntry.SetPlaceHolder("Enter output file name (e.g., combined_output.csv)")
-
-	// Container to hold the widgets that will change based on selection
 	outputOptionsContainer := container.NewVBox()
+	updateOutputOptions(outputOptionRadio.Selected, outputOptionsContainer)
 
-	// Function to update the output options container
-	updateOutputOptions := func(selected string) {
-		outputOptionsContainer.Objects = nil
-		if selected == "Select Existing CSV File" {
-			outputOptionsContainer.Add(outputFileEntry)
-			outputOptionsContainer.Add(selectOutputFileBtn)
-		} else if selected == "Specify Output Folder and Filename" {
-			outputOptionsContainer.Add(outputPathEntry)
-			outputOptionsContainer.Add(selectOutputFolderBtn)
-			outputOptionsContainer.Add(outputFileNameEntry)
-		}
-		outputOptionsContainer.Refresh()
+	outputOptionRadio.OnChanged = func(selected string) {
+		updateOutputOptions(selected, outputOptionsContainer)
 	}
 
-	// Set the initial state
-	updateOutputOptions(outputOptionRadio.Selected)
+	return outputOptionRadio, outputOptionsContainer
+}
 
-	// Set the handler for when the selection changes
-	outputOptionRadio.OnChanged = updateOutputOptions
+// updateOutputOptions updates the output options container based on the selected option
+func updateOutputOptions(selected string, container *fyne.Container) {
+	container.Objects = nil
 
-	return outputPathEntry, selectOutputFolderBtn, outputFileNameEntry, outputFileEntry, outputOptionRadio, outputOptionsContainer
+	if selected == "Select Existing CSV File" {
+		outputFileEntry := widget.NewEntry()
+		outputFileEntry.SetPlaceHolder("No output file selected")
+		selectOutputFileBtn := widget.NewButton("Select Output File", func() {
+			filePath, err := dialog.File().Title("Select Output CSV File").Filter("CSV Files", "csv").Load()
+			if err == nil {
+				outputFileEntry.SetText(filePath)
+			}
+		})
+
+		container.Add(outputFileEntry)
+		container.Add(selectOutputFileBtn)
+
+	} else if selected == "Specify Output Folder and Filename" {
+		outputPathEntry := widget.NewEntry()
+		outputPathEntry.SetPlaceHolder("No output folder selected")
+		selectOutputFolderBtn := widget.NewButton("Select Output Folder", func() {
+			folderPath, err := dialog.Directory().Title("Select Output Folder").Browse()
+			if err == nil {
+				outputPathEntry.SetText(folderPath)
+			}
+		})
+
+		outputFileNameEntry := widget.NewEntry()
+		outputFileNameEntry.SetPlaceHolder("Enter output file name (e.g., combined_output.csv)")
+
+		container.Add(outputPathEntry)
+		container.Add(selectOutputFolderBtn)
+		container.Add(outputFileNameEntry)
+	}
+
+	container.Refresh()
 }
 
 // createStartButton creates the start button to begin processing
 func createStartButton(
 	inputPathEntry *widget.Entry,
-	outputPathEntry *widget.Entry,
-	outputFileNameEntry *widget.Entry,
-	outputFileEntry *widget.Entry,
 	outputOptionRadio *widget.RadioGroup,
+	outputOptionsContainer *fyne.Container,
 	selectedFiles *[]string,
 	myWindow fyne.Window,
 ) *widget.Button {
 	return widget.NewButton("Start Processing", func() {
 		go func() {
-			inputPath := inputPathEntry.Text
-			outputPath := outputPathEntry.Text
-			outputFileName := outputFileNameEntry.Text
-			outputFile := outputFileEntry.Text
-			outputOption := outputOptionRadio.Selected
-
-			if inputPath == "" && len(*selectedFiles) == 0 {
-				utils.ShowError(fmt.Errorf("Please select an input folder or add files"), myWindow)
+			// Validate inputs
+			if err := validateCombineInputs(inputPathEntry, outputOptionRadio, outputOptionsContainer, selectedFiles, myWindow); err != nil {
 				return
 			}
 
-			// Output validation
-			var outputFilePath string
-			if outputOption == "Select Existing CSV File" {
-				if outputFile == "" {
-					utils.ShowError(fmt.Errorf("Please select an output CSV file"), myWindow)
-					return
-				}
-				outputFilePath = outputFile
-			} else if outputOption == "Specify Output Folder and Filename" {
-				if outputPath == "" {
-					utils.ShowError(fmt.Errorf("Please select an output folder"), myWindow)
-					return
-				}
-				if outputFileName == "" {
-					utils.ShowError(fmt.Errorf("Please enter an output file name"), myWindow)
-					return
-				}
-				// Ensure the output file has a .csv extension
-				if !strings.HasSuffix(strings.ToLower(outputFileName), ".csv") {
-					utils.ShowError(fmt.Errorf("Output file name must have a .csv extension"), myWindow)
-					return
-				}
-				outputFilePath = filepath.Join(outputPath, outputFileName)
-			} else {
-				utils.ShowError(fmt.Errorf("Invalid output option selected"), myWindow)
-				return
-			}
-
-			// Check if the output file exists
-			var existingHeaders []string
-			if _, err := os.Stat(outputFilePath); err == nil {
-				// File exists, load headers
-				existingHeaders, err = records.GetCSVHeaders(outputFilePath)
-				if err != nil {
-					utils.ShowError(fmt.Errorf("Error reading existing file headers: %v", err), myWindow)
-					return
-				}
-			}
-
-			// Open the log file for writing
-			logFilePath := filepath.Join(filepath.Dir(outputFilePath), "process_log.txt")
-			logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+			// Determine output file path
+			outputFilePath, err := determineCombineOutputPath(outputOptionRadio, outputOptionsContainer)
 			if err != nil {
-				utils.ShowError(fmt.Errorf("Failed to open log file: %v", err), myWindow)
-				return
-			}
-			defer logFile.Close()
-
-			// Set up the logger to write to the log file
-			utils.Logger = log.New(logFile, "", log.Ldate|log.Ltime)
-
-			recordsMap := make(map[string]records.Record)
-
-			var wg sync.WaitGroup
-			recordChan := make(chan records.Record)
-
-			// Start a goroutine to collect all records into the map
-			go func() {
-				for record := range recordChan {
-					if _, exists := recordsMap[record.Email]; !exists {
-						recordsMap[record.Email] = record
-					}
-				}
-			}()
-
-			var files []string
-
-			if len(*selectedFiles) > 0 {
-				files = *selectedFiles
-			} else {
-				// Process the inputPath
-				fileInfo, err := os.Stat(inputPath)
-				if err != nil {
-					utils.ShowError(fmt.Errorf("Error accessing path: %v", err), myWindow)
-					return
-				}
-
-				if fileInfo.IsDir() {
-					// Walk through the folder and process each file
-					err := filepath.Walk(inputPath, func(path string, info os.FileInfo, err error) error {
-						if err != nil {
-							utils.LogMessage(fmt.Sprintf("Error accessing file: %s - %v", path, err))
-							return nil // Continue to the next file
-						}
-						// Check if the file is either a CSV or XLSX file
-						if !info.IsDir() {
-							ext := strings.ToLower(filepath.Ext(path))
-							if ext == ".csv" || ext == ".xlsx" {
-								files = append(files, path)
-							} else {
-								// Log and skip non-CSV and non-XLSX files
-								utils.LogMessage(fmt.Sprintf("Skipping unsupported file type: %s", path))
-							}
-						}
-						return nil
-					})
-					if err != nil {
-						utils.LogMessage(fmt.Sprintf("Error walking the directory: %v", err))
-					}
-				} else {
-					// Single file selected
-					ext := strings.ToLower(filepath.Ext(inputPath))
-					if ext == ".csv" || ext == ".xlsx" {
-						files = append(files, inputPath)
-					} else {
-						utils.ShowError(fmt.Errorf("Unsupported file type selected"), myWindow)
-						return
-					}
-				}
-			}
-
-			// Update UI with file count
-			fileCount := len(files)
-			utils.LogMessage(fmt.Sprintf("Total files to process: %d", fileCount))
-
-			if fileCount == 0 {
-				utils.ShowError(fmt.Errorf("No CSV or XLSX files found in the selected input"), myWindow)
+				utils.ShowError(err, myWindow)
 				return
 			}
 
-			// Process files concurrently
-			for _, filePath := range files {
-				wg.Add(1)
-				go func(filePath string) {
-					defer wg.Done()
-					ext := strings.ToLower(filepath.Ext(filePath))
-					utils.LogMessage(fmt.Sprintf("Processing file: %s", filePath))
-					if ext == ".csv" {
-						records.LoadCSV(filePath, recordChan)
-					} else if ext == ".xlsx" {
-						records.LoadXLSX(filePath, recordChan)
-					}
-				}(filePath)
+			// Initialize logger
+			if err := utils.InitializeLogger(filepath.Join(filepath.Dir(outputFilePath), "process_log.txt")); err != nil {
+				utils.ShowError(fmt.Errorf("Failed to initialize logger: %v", err), myWindow)
+				return
 			}
 
-			// Wait for all file processing to complete
-			wg.Wait()
-			close(recordChan) // Close the channel when all records are processed
-
-			// Check if the headers match if the file already exists
-			if len(existingHeaders) > 0 {
-				if !records.ValidateHeaders(existingHeaders) {
-					utils.LogMessage("Existing file headers do not match requirements, creating a new file.")
-					// Create a new file if headers do not match
-					err := records.WriteCSV(outputFilePath, recordsMap)
-					if err != nil {
-						utils.LogMessage(fmt.Sprintf("Error writing to CSV: %v", err))
-					} else {
-						utils.LogMessage(fmt.Sprintf("Processing completed, duplicates removed! Output file saved to %s", outputFilePath))
-						utils.ShowInfo("Processing completed successfully!", myWindow)
-					}
-				} else {
-					// Append to the existing file if headers match
-					err := records.AppendCSV(outputFilePath, recordsMap)
-					if err != nil {
-						utils.LogMessage(fmt.Sprintf("Error appending to CSV: %v", err))
-					} else {
-						utils.LogMessage(fmt.Sprintf("Records appended to existing file: %s", outputFilePath))
-						utils.ShowInfo("Records appended successfully!", myWindow)
-					}
-				}
-			} else {
-				// Create a new file if it does not exist
-				err := records.WriteCSV(outputFilePath, recordsMap)
-				if err != nil {
-					utils.LogMessage(fmt.Sprintf("Error writing to CSV: %v", err))
-				} else {
-					utils.LogMessage(fmt.Sprintf("Processing completed, duplicates removed! Output file saved to %s", outputFilePath))
-					utils.ShowInfo("Processing completed successfully!", myWindow)
-				}
+			// Start processing
+			if err := combineFiles(inputPathEntry.Text, selectedFiles, outputFilePath); err != nil {
+				utils.ShowError(err, myWindow)
+				return
 			}
+
+			utils.ShowInfo("Processing completed successfully!", myWindow)
 		}()
 	})
+}
+
+// validateCombineInputs validates the inputs before processing
+func validateCombineInputs(
+	inputPathEntry *widget.Entry,
+	outputOptionRadio *widget.RadioGroup,
+	outputOptionsContainer *fyne.Container,
+	selectedFiles *[]string,
+	myWindow fyne.Window,
+) error {
+	inputPath := inputPathEntry.Text
+	if inputPath == "" && len(*selectedFiles) == 0 {
+		err := fmt.Errorf("Please select an input folder or add files")
+		utils.ShowError(err, myWindow)
+		return err
+	}
+
+	// Validate output options
+	outputOption := outputOptionRadio.Selected
+	if outputOption == "Select Existing CSV File" {
+		if len(outputOptionsContainer.Objects) > 0 {
+			outputFileEntry, ok := outputOptionsContainer.Objects[0].(*widget.Entry)
+			if !ok {
+				err := fmt.Errorf("Unexpected widget type in output options")
+				utils.ShowError(err, myWindow)
+				return err
+			}
+			if outputFileEntry.Text == "" {
+				err := fmt.Errorf("Please select an output CSV file")
+				utils.ShowError(err, myWindow)
+				return err
+			}
+		} else {
+			err := fmt.Errorf("Output options are missing")
+			utils.ShowError(err, myWindow)
+			return err
+		}
+	} else if outputOption == "Specify Output Folder and Filename" {
+		if len(outputOptionsContainer.Objects) >= 3 {
+			outputPathEntry, okPath := outputOptionsContainer.Objects[0].(*widget.Entry)
+			_, okBtn := outputOptionsContainer.Objects[1].(*widget.Button)
+			outputFileNameEntry, okName := outputOptionsContainer.Objects[2].(*widget.Entry)
+			if !okPath || !okBtn || !okName {
+				err := fmt.Errorf("Unexpected widget types in output options")
+				utils.ShowError(err, myWindow)
+				return err
+			}
+			if outputPathEntry.Text == "" {
+				err := fmt.Errorf("Please select an output folder")
+				utils.ShowError(err, myWindow)
+				return err
+			}
+			if outputFileNameEntry.Text == "" {
+				err := fmt.Errorf("Please enter an output file name")
+				utils.ShowError(err, myWindow)
+				return err
+			}
+			if !strings.HasSuffix(strings.ToLower(outputFileNameEntry.Text), ".csv") {
+				err := fmt.Errorf("Output file name must have a .csv extension")
+				utils.ShowError(err, myWindow)
+				return err
+			}
+		} else {
+			err := fmt.Errorf("Output options are incomplete")
+			utils.ShowError(err, myWindow)
+			return err
+		}
+	} else {
+		err := fmt.Errorf("Invalid output option selected")
+		utils.ShowError(err, myWindow)
+		return err
+	}
+
+	return nil
+}
+
+// determineCombineOutputPath determines the output file path based on user selection
+func determineCombineOutputPath(outputOptionRadio *widget.RadioGroup, outputOptionsContainer *fyne.Container) (string, error) {
+	outputOption := outputOptionRadio.Selected
+
+	if outputOption == "Select Existing CSV File" {
+		outputFileEntry := outputOptionsContainer.Objects[0].(*widget.Entry)
+		return outputFileEntry.Text, nil
+	} else if outputOption == "Specify Output Folder and Filename" {
+		outputPathEntry := outputOptionsContainer.Objects[0].(*widget.Entry)
+		outputFileNameEntry := outputOptionsContainer.Objects[2].(*widget.Entry)
+		return filepath.Join(outputPathEntry.Text, outputFileNameEntry.Text), nil
+	}
+
+	return "", fmt.Errorf("Invalid output option selected")
+}
+
+// combineFiles processes and combines input files into a single output file
+func combineFiles(inputPath string, selectedFiles *[]string, outputFilePath string) error {
+	recordsMap := make(map[string]records.Record)
+	var files []string
+
+	if len(*selectedFiles) > 0 {
+		files = *selectedFiles
+	} else {
+		// Process the inputPath
+		fileInfo, err := os.Stat(inputPath)
+		if err != nil {
+			return fmt.Errorf("Error accessing path: %v", err)
+		}
+
+		if fileInfo.IsDir() {
+			// Collect all CSV and XLSX files from the directory
+			err := filepath.Walk(inputPath, func(path string, info os.FileInfo, err error) error {
+				if err == nil && !info.IsDir() {
+					ext := strings.ToLower(filepath.Ext(path))
+					if ext == ".csv" || ext == ".xlsx" {
+						files = append(files, path)
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				utils.LogMessage(fmt.Sprintf("Error walking the directory: %v", err))
+			}
+		} else {
+			// Single file selected
+			ext := strings.ToLower(filepath.Ext(inputPath))
+			if ext == ".csv" || ext == ".xlsx" {
+				files = append(files, inputPath)
+			} else {
+				return fmt.Errorf("Unsupported file type selected")
+			}
+		}
+	}
+
+	// Update UI with file count
+	fileCount := len(files)
+	utils.LogMessage(fmt.Sprintf("Total files to process: %d", fileCount))
+
+	if fileCount == 0 {
+		return fmt.Errorf("No CSV or XLSX files found in the selected input")
+	}
+
+	// Process files
+	for _, filePath := range files {
+		utils.LogMessage(fmt.Sprintf("Processing file: %s", filePath))
+		recordsList, _, err := records.LoadRecords(filePath)
+		if err != nil {
+			utils.LogMessage(fmt.Sprintf("Error loading records from file %s: %v", filePath, err))
+			continue
+		}
+		for _, record := range recordsList {
+			if _, exists := recordsMap[record.Email]; !exists {
+				recordsMap[record.Email] = record
+			}
+		}
+	}
+
+	// Write to output file
+	headers := []string{"Name", "Email", "OrgName"} // Update as per actual headers
+	err := records.WriteFilteredCSV(outputFilePath, headers, mapToSlice(recordsMap))
+	if err != nil {
+		utils.LogMessage(fmt.Sprintf("Error writing to CSV: %v", err))
+		return fmt.Errorf("Error writing to CSV: %v", err)
+	}
+
+	utils.LogMessage(fmt.Sprintf("Processing completed, duplicates removed! Output file saved to %s", outputFilePath))
+	return nil
+}
+
+// mapToSlice converts a map of records to a slice
+func mapToSlice(recordsMap map[string]records.Record) []records.Record {
+	recordsList := make([]records.Record, 0, len(recordsMap))
+	for _, record := range recordsMap {
+		recordsList = append(recordsList, record)
+	}
+	return recordsList
 }
 
 // createLogViewer creates the log viewer for displaying log messages
 func createLogViewer() *widget.Entry {
 	logContent := widget.NewMultiLineEntry()
 	logContent.Wrapping = fyne.TextWrapWord
+	logContent.Disable()
 
 	// Periodically update the log viewer
 	go func() {
 		for {
+			time.Sleep(1 * time.Second)
 			utils.LogMutex.Lock()
-			logText := strings.Join(utils.LogMessages, "\n")
-			logContent.SetText(logText)
+			logContent.SetText(strings.Join(utils.LogMessages, "\n"))
 			utils.LogMutex.Unlock()
-			time.Sleep(500 * time.Millisecond)
 		}
 	}()
 
