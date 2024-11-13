@@ -215,7 +215,7 @@ func validateCombineInputs(
 	} else if outputOption == "Specify Output Folder and Filename" {
 		if len(outputOptionsContainer.Objects) >= 3 {
 			outputPathEntry, okPath := outputOptionsContainer.Objects[0].(*widget.Entry)
-			selectOutputFolderBtn, okBtn := outputOptionsContainer.Objects[1].(*widget.Button)
+			_, okBtn := outputOptionsContainer.Objects[1].(*widget.Button)
 			outputFileNameEntry, okName := outputOptionsContainer.Objects[2].(*widget.Entry)
 			if !okPath || !okBtn || !okName {
 				err := fmt.Errorf("Unexpected widget types in output options")
