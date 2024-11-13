@@ -213,20 +213,32 @@ func validateCombineInputs(
 			return err
 		}
 	} else if outputOption == "Specify Output Folder and Filename" {
-		outputPathEntry := outputOptionsContainer.Objects[0].(*widget.Entry)
-		outputFileNameEntry := outputOptionsContainer.Objects[2].(*widget.Entry)
-		if outputPathEntry.Text == "" {
-			err := fmt.Errorf("Please select an output folder")
-			utils.ShowError(err, myWindow)
-			return err
-		}
-		if outputFileNameEntry.Text == "" {
-			err := fmt.Errorf("Please enter an output file name")
-			utils.ShowError(err, myWindow)
-			return err
-		}
-		if !strings.HasSuffix(strings.ToLower(outputFileNameEntry.Text), ".csv") {
-			err := fmt.Errorf("Output file name must have a .csv extension")
+		if len(outputOptionsContainer.Objects) >= 3 {
+			outputPathEntry, okPath := outputOptionsContainer.Objects[0].(*widget.Entry)
+			selectOutputFolderBtn, okBtn := outputOptionsContainer.Objects[1].(*widget.Button)
+			outputFileNameEntry, okName := outputOptionsContainer.Objects[2].(*widget.Entry)
+			if !okPath || !okBtn || !okName {
+				err := fmt.Errorf("Unexpected widget types in output options")
+				utils.ShowError(err, myWindow)
+				return err
+			}
+			if outputPathEntry.Text == "" {
+				err := fmt.Errorf("Please select an output folder")
+				utils.ShowError(err, myWindow)
+				return err
+			}
+			if outputFileNameEntry.Text == "" {
+				err := fmt.Errorf("Please enter an output file name")
+				utils.ShowError(err, myWindow)
+				return err
+			}
+			if !strings.HasSuffix(strings.ToLower(outputFileNameEntry.Text), ".csv") {
+				err := fmt.Errorf("Output file name must have a .csv extension")
+				utils.ShowError(err, myWindow)
+				return err
+			}
+		} else {
+			err := fmt.Errorf("Output options are incomplete")
 			utils.ShowError(err, myWindow)
 			return err
 		}
