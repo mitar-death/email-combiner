@@ -206,9 +206,20 @@ func validateCombineInputs(
 	// Validate output options
 	outputOption := outputOptionRadio.Selected
 	if outputOption == "Select Existing CSV File" {
-		outputFileEntry := outputOptionsContainer.Objects[0].(*widget.Entry)
-		if outputFileEntry.Text == "" {
-			err := fmt.Errorf("Please select an output CSV file")
+		if len(outputOptionsContainer.Objects) > 0 {
+			outputFileEntry, ok := outputOptionsContainer.Objects[0].(*widget.Entry)
+			if !ok {
+				err := fmt.Errorf("Unexpected widget type in output options")
+				utils.ShowError(err, myWindow)
+				return err
+			}
+			if outputFileEntry.Text == "" {
+				err := fmt.Errorf("Please select an output CSV file")
+				utils.ShowError(err, myWindow)
+				return err
+			}
+		} else {
+			err := fmt.Errorf("Output options are missing")
 			utils.ShowError(err, myWindow)
 			return err
 		}
