@@ -3,7 +3,6 @@ package records
 import (
 	"encoding/csv"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,268 +22,189 @@ type Record struct {
 
 // Load records from CSV or XLSX file
 func LoadRecords(filename string) ([]Record, []string, error) {
-
 	ext := strings.ToLower(filepath.Ext(filename))
-	if ext == ".csv" {
+	switch ext {
+	case ".csv":
 		return loadRecordsFromCSV(filename)
-	} else if ext == ".xlsx" {
+	case ".xlsx":
 		return loadRecordsFromXLSX(filename)
+	default:
+		return nil, nil, fmt.Errorf("unsupported file type: %s", ext)
 	}
-	return nil, nil, fmt.Errorf("unsupported file type: %s", ext)
 }
 
+// loadRecordsFromCSV loads records from a CSV file.
 func loadRecordsFromCSV(filename string) ([]Record, []string, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("error opening CSV file %s: %v", filename, err)
 	}
 	defer file.Close()
 
-	var records []Record
 	reader := csv.NewReader(file)
 	reader.LazyQuotes = true
 	reader.FieldsPerRecord = -1
+
 	rows, err := reader.ReadAll()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("error reading CSV file %s: %v", filename, err)
 	}
 
 	if len(rows) == 0 {
-		return records, nil, nil
+		return nil, nil, fmt.Errorf("no data found in CSV file: %s", filename)
 	}
 
 	headers := sanitizeHeaders(rows[0])
 
-	// Find the required column indexes dynamically, using flexible matching
+	// Find required columns
 	emailIndex := findFlexibleHeaderIndex(headers, "email")
 	nameIndex := findFlexibleHeaderIndex(headers, "name")
-	orgNameIndex := findFlexibleHeaderIndex(headers, "organization") // Optional
+	orgNameIndex := findFlexibleHeaderIndex(headers, "organization")
 
-	// Skip files if required columns are not found
 	if emailIndex == -1 || nameIndex == -1 {
-		return nil, nil, fmt.Errorf("required columns (Name, Email) not found in CSV file")
+		return nil, nil, fmt.Errorf("required columns (Name, Email) not found in CSV file: %s", filename)
 	}
 
-	// Process rows, start from 1 to skip header
+	records := make([]Record, 0, len(rows)-1)
+
 	for _, row := range rows[1:] {
-		if len(row) <= emailIndex || len(row) <= nameIndex {
-			// Skip rows that don't have enough columns
+		record, err := createRecordFromRow(row, headers, nameIndex, emailIndex, orgNameIndex)
+		if err != nil {
+			// Skip invalid rows but log the error
+			utils.LogMessage(fmt.Sprintf("Error processing row in file %s: %v", filename, err))
 			continue
 		}
-
-		// Map headers to values
-		rowMap := make(map[string]string)
-		for i, header := range headers {
-			if i < len(row) {
-				rowMap[header] = row[i]
-			} else {
-				rowMap[header] = ""
-			}
-		}
-
-		email := rowMap[headers[emailIndex]]
-		name := rowMap[headers[nameIndex]]
-		orgName := ""
-		if orgNameIndex != -1 {
-			orgName = rowMap[headers[orgNameIndex]]
-		}
-
-		// Remove standard fields from OthersMap
-		delete(rowMap, headers[nameIndex])
-		delete(rowMap, headers[emailIndex])
-		if orgNameIndex != -1 {
-			delete(rowMap, headers[orgNameIndex])
-		}
-
-		// Collect the record
-		records = append(records, Record{
-			Name:      name,
-			OrgName:   orgName,
-			Email:     email,
-			OthersMap: rowMap,
-			FilePath:  filename,
-		})
+		record.FilePath = filename
+		records = append(records, record)
 	}
 
 	return records, headers, nil
 }
 
+// loadRecordsFromXLSX loads records from an XLSX file.
 func loadRecordsFromXLSX(filename string) ([]Record, []string, error) {
 	file, err := xlsx.OpenFile(filename)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("error opening XLSX file %s: %v", filename, err)
 	}
 
 	var records []Record
 	var headers []string
-
 	for _, sheet := range file.Sheets {
 		if len(sheet.Rows) == 0 {
 			continue
 		}
 		headers = sanitizeHeadersXLSX(sheet.Rows[0].Cells)
 
-		// Find the required column indexes dynamically using flexible matching
+		// Find required columns
 		emailIndex := findFlexibleHeaderIndex(headers, "email")
 		nameIndex := findFlexibleHeaderIndex(headers, "name")
-		orgNameIndex := findFlexibleHeaderIndex(headers, "organization") // Optional
+		orgNameIndex := findFlexibleHeaderIndex(headers, "organization")
 
-		// Skip files if required columns are not found
 		if emailIndex == -1 || nameIndex == -1 {
-			return nil, nil, fmt.Errorf("required columns (Name, Email) not found in XLSX file")
+			return nil, nil, fmt.Errorf("required columns (Name, Email) not found in XLSX file: %s", filename)
 		}
 
-		// Process rows, start from 1 to skip header
 		for _, row := range sheet.Rows[1:] {
-			if len(row.Cells) <= emailIndex || len(row.Cells) <= nameIndex {
-				// Skip rows that don't have enough columns
+			record, err := createRecordFromXLSXRow(row, headers, nameIndex, emailIndex, orgNameIndex)
+			if err != nil {
+				utils.LogMessage(fmt.Sprintf("Error processing row in file %s: %v", filename, err))
 				continue
 			}
-
-			// Map headers to values
-			rowMap := make(map[string]string)
-			for i, header := range headers {
-				if i < len(row.Cells) {
-					rowMap[header] = row.Cells[i].String()
-				} else {
-					rowMap[header] = ""
-				}
-			}
-
-			email := rowMap[headers[emailIndex]]
-			name := rowMap[headers[nameIndex]]
-			orgName := ""
-			if orgNameIndex != -1 {
-				orgName = rowMap[headers[orgNameIndex]]
-			}
-
-			// Remove standard fields from OthersMap
-			delete(rowMap, headers[nameIndex])
-			delete(rowMap, headers[emailIndex])
-			if orgNameIndex != -1 {
-				delete(rowMap, headers[orgNameIndex])
-			}
-
-			// Collect the record
-			records = append(records, Record{
-				Name:      name,
-				OrgName:   orgName,
-				Email:     email,
-				OthersMap: rowMap,
-				FilePath:  filename,
-			})
+			record.FilePath = filename
+			records = append(records, record)
 		}
+	}
 
+	if len(records) == 0 {
+		return nil, nil, fmt.Errorf("no valid records found in XLSX file: %s", filename)
 	}
 
 	return records, headers, nil
 }
 
-func LoadCSV(filename string, recordChan chan<- Record) {
-	file, err := os.Open(filename)
-	if err != nil {
-		utils.LogMessage(fmt.Sprintf("Error opening CSV file: %s - %v", filename, err))
-		return
-	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-	reader.LazyQuotes = true    // Allows for malformed CSV fields like bare quotes
-	reader.FieldsPerRecord = -1 // Allow variable number of fields per row
-	rows, err := reader.ReadAll()
-	if err != nil {
-		utils.LogMessage(fmt.Sprintf("Error reading CSV file: %s - %v", filename, err))
-		return
+// createRecordFromRow creates a Record from a CSV row.
+func createRecordFromRow(row []string, headers []string, nameIndex, emailIndex, orgNameIndex int) (Record, error) {
+	if len(row) <= emailIndex || len(row) <= nameIndex {
+		return Record{}, fmt.Errorf("row does not have required columns")
 	}
 
-	if len(rows) == 0 {
-		utils.LogMessage(fmt.Sprintf("No data found in CSV file: %s", filename))
-		return
+	rowMap := mapRowData(row, headers)
+	email := rowMap[headers[emailIndex]]
+	name := rowMap[headers[nameIndex]]
+	orgName := ""
+	if orgNameIndex != -1 {
+		orgName = rowMap[headers[orgNameIndex]]
 	}
 
-	headers := sanitizeHeaders(rows[0])
-
-	// Find the required column indexes dynamically, using flexible matching
-	emailIndex := findFlexibleHeaderIndex(headers, "email")
-	nameIndex := findFlexibleHeaderIndex(headers, "name")
-	orgNameIndex := findFlexibleHeaderIndex(headers, "organization") // Optional
-
-	// Skip files if required columns are not found
-	if emailIndex == -1 || nameIndex == -1 {
-		utils.LogMessage(fmt.Sprintf("Required columns (Name, Email) not found in CSV file: %s, skipping...", filename))
-		return
+	// Remove standard fields from OthersMap
+	delete(rowMap, headers[nameIndex])
+	delete(rowMap, headers[emailIndex])
+	if orgNameIndex != -1 {
+		delete(rowMap, headers[orgNameIndex])
 	}
 
-	// Process rows, start from 1 to skip header
-	for _, row := range rows[1:] {
-		if len(row) <= emailIndex || len(row) <= nameIndex {
-			// Skip rows that don't have enough columns
-			continue
-		}
-		email := row[emailIndex]
-		name := row[nameIndex]
-		orgName := ""
-		if orgNameIndex != -1 && len(row) > orgNameIndex {
-			orgName = row[orgNameIndex]
-		}
-
-		// Send the record to the channel
-		recordChan <- Record{
-			Name:    name,
-			OrgName: orgName,
-			Email:   email,
-			Others:  excludeColumns(row, []int{nameIndex, orgNameIndex, emailIndex}),
-		}
-	}
+	return Record{
+		Name:      name,
+		OrgName:   orgName,
+		Email:     email,
+		OthersMap: rowMap,
+	}, nil
 }
 
-func LoadXLSX(filename string, recordChan chan<- Record) {
-	file, err := xlsx.OpenFile(filename)
-	if err != nil {
-		utils.LogMessage(fmt.Sprintf("Error opening XLSX file: %s - %v", filename, err))
-		return
+// createRecordFromXLSXRow creates a Record from an XLSX row.
+func createRecordFromXLSXRow(row *xlsx.Row, headers []string, nameIndex, emailIndex, orgNameIndex int) (Record, error) {
+	if len(row.Cells) <= emailIndex || len(row.Cells) <= nameIndex {
+		return Record{}, fmt.Errorf("row does not have required columns")
 	}
 
-	for _, sheet := range file.Sheets {
-		if len(sheet.Rows) == 0 {
-			utils.LogMessage(fmt.Sprintf("No data found in XLSX file: %s", filename))
-			continue
-		}
-		headers := sanitizeHeadersXLSX(sheet.Rows[0].Cells)
+	rowMap := mapXLSXRowData(row, headers)
+	email := rowMap[headers[emailIndex]]
+	name := rowMap[headers[nameIndex]]
+	orgName := ""
+	if orgNameIndex != -1 {
+		orgName = rowMap[headers[orgNameIndex]]
+	}
 
-		// Find the required column indexes dynamically using flexible matching
-		emailIndex := findFlexibleHeaderIndex(headers, "email")
-		nameIndex := findFlexibleHeaderIndex(headers, "name")
-		orgNameIndex := findFlexibleHeaderIndex(headers, "organization") // Optional
+	// Remove standard fields from OthersMap
+	delete(rowMap, headers[nameIndex])
+	delete(rowMap, headers[emailIndex])
+	if orgNameIndex != -1 {
+		delete(rowMap, headers[orgNameIndex])
+	}
 
-		// Skip files if required columns are not found
-		if emailIndex == -1 || nameIndex == -1 {
-			utils.LogMessage(fmt.Sprintf("Required columns (Name, Email) not found in XLSX file: %s, skipping...", filename))
-			continue
-		}
+	return Record{
+		Name:      name,
+		OrgName:   orgName,
+		Email:     email,
+		OthersMap: rowMap,
+	}, nil
+}
 
-		// Process rows, start from 1 to skip header
-		for _, row := range sheet.Rows[1:] {
-			if len(row.Cells) <= emailIndex || len(row.Cells) <= nameIndex {
-				// Skip rows that don't have enough columns
-				continue
-			}
-			email := row.Cells[emailIndex].String()
-			name := row.Cells[nameIndex].String()
-			orgName := ""
-			if orgNameIndex != -1 && len(row.Cells) > orgNameIndex {
-				orgName = row.Cells[orgNameIndex].String()
-			}
-
-			// Send the record to the channel
-			recordChan <- Record{
-				Name:    name,
-				OrgName: orgName,
-				Email:   email,
-				Others:  getRowDataExcluding(row, []int{nameIndex, orgNameIndex, emailIndex}),
-			}
+// mapXLSXRowData maps XLSX row data to a map using headers.
+func mapXLSXRowData(row *xlsx.Row, headers []string) map[string]string {
+	rowMap := make(map[string]string)
+	for i, header := range headers {
+		if i < len(row.Cells) {
+			rowMap[header] = row.Cells[i].String()
+		} else {
+			rowMap[header] = ""
 		}
 	}
+	return rowMap
+}
+
+// mapRowData maps CSV row data to a map using headers.
+func mapRowData(row []string, headers []string) map[string]string {
+	rowMap := make(map[string]string)
+	for i, header := range headers {
+		if i < len(row) {
+			rowMap[header] = row[i]
+		} else {
+			rowMap[header] = ""
+		}
+	}
+	return rowMap
 }
 
 func WriteCSV(filename string, recordsMap map[string]Record) error {
@@ -315,52 +235,40 @@ func WriteCSV(filename string, recordsMap map[string]Record) error {
 	return nil
 }
 
+// WriteFilteredCSV writes filtered records to a CSV file.
 func WriteFilteredCSV(filename string, headers []string, records []Record) error {
+	// **Ensure the output directory exists**
+
 	file, err := os.Create(filename)
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating output CSV file %s: %v", filename, err)
 	}
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	// Write header
-	err = writer.Write(headers)
-	if err != nil {
-		return err
+	// Write headers
+	if err := writer.Write(headers); err != nil {
+		return fmt.Errorf("error writing headers to CSV file %s: %v", filename, err)
 	}
-	// Write records
+
 	for _, record := range records {
-		// Map field names to values
-		recordMap := map[string]string{
-			"Name":    record.Name,
-			"OrgName": record.OrgName,
-			"Email":   record.Email,
-		}
-
-		// Merge with OthersMap
-		for k, v := range record.OthersMap {
-			fmt.Printf("k: %s, v: %s", k, v)
-			recordMap[k] = v
-		}
-
-		// Prepare the row data based on headers
-		var row []string
-		for _, header := range headers {
-			if val, ok := recordMap[header]; ok {
-				row = append(row, val)
-			} else {
-				// Header not found in record, append empty string
-				row = append(row, "")
+		row := make([]string, len(headers))
+		for i, header := range headers {
+			value := record.OthersMap[header]
+			switch header {
+			case "Name":
+				value = record.Name
+			case "OrgName":
+				value = record.OrgName
+			case "Email":
+				value = record.Email
 			}
+			row[i] = value
 		}
-
-		fmt.Printf("Final row data: %v", row)
-
-		err = writer.Write(row)
-		if err != nil {
-			return err
+		if err := writer.Write(row); err != nil {
+			return fmt.Errorf("error writing record to CSV file %s: %v", filename, err)
 		}
 	}
 
@@ -390,32 +298,34 @@ func AppendCSV(filename string, recordsMap map[string]Record) error {
 	return nil
 }
 
+// LoadEmailsFromCSV loads emails from a CSV file into a map for quick lookup.
 func LoadEmailsFromCSV(filename string) (map[string]bool, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error opening CSV file %s: %v", filename, err)
 	}
 	defer file.Close()
 
-	emails := make(map[string]bool)
 	reader := csv.NewReader(file)
 	reader.LazyQuotes = true
 	reader.FieldsPerRecord = -1
+
 	rows, err := reader.ReadAll()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error reading CSV file %s: %v", filename, err)
 	}
 
 	if len(rows) == 0 {
-		return emails, nil
+		return nil, fmt.Errorf("no data found in CSV file: %s", filename)
 	}
 
 	headers := sanitizeHeaders(rows[0])
 	emailIndex := findFlexibleHeaderIndex(headers, "email")
 	if emailIndex == -1 {
-		return nil, fmt.Errorf("email column not found in database file")
+		return nil, fmt.Errorf("email column not found in database file: %s", filename)
 	}
 
+	emails := make(map[string]bool, len(rows)-1)
 	for _, row := range rows[1:] {
 		if len(row) > emailIndex {
 			email := row[emailIndex]
@@ -436,95 +346,56 @@ func ValidateHeaders(headers []string) bool {
 	return true
 }
 
+// findFlexibleHeaderIndex finds the index of a header containing the keyword.
 func findFlexibleHeaderIndex(headers []string, keyword string) int {
-	for i, h := range headers {
-		h = strings.TrimSpace(h)
-		h = strings.Trim(h, `"`) // Remove surrounding quotes
-		if strings.Contains(strings.ToLower(h), strings.ToLower(keyword)) {
+	lowerKeyword := strings.ToLower(keyword)
+	for i, header := range headers {
+		h := strings.ToLower(header)
+		if strings.Contains(h, lowerKeyword) {
 			return i
 		}
 	}
 	return -1
 }
 
+// sanitizeHeaders trims headers and removes surrounding quotes.
 func sanitizeHeaders(headers []string) []string {
-	for i := range headers {
-		headers[i] = strings.Trim(headers[i], `"`) // Remove surrounding quotes
-		headers[i] = strings.TrimSpace(headers[i]) // Remove any extra spaces
+	for i, header := range headers {
+		header = strings.TrimSpace(header)
+		header = strings.Trim(header, `"`)
+		headers[i] = header
 	}
 	return headers
 }
 
-func sanitizeHeadersXLSX(headers []*xlsx.Cell) []string {
-	var sanitizedHeaders []string
-	for _, cell := range headers {
-		header := strings.Trim(cell.String(), `"`) // Remove surrounding quotes
-		header = strings.TrimSpace(header)         // Remove any extra spaces
-		sanitizedHeaders = append(sanitizedHeaders, header)
+// sanitizeHeadersXLSX trims XLSX headers and removes surrounding quotes.
+func sanitizeHeadersXLSX(cells []*xlsx.Cell) []string {
+	headers := make([]string, len(cells))
+	for i, cell := range cells {
+		header := strings.TrimSpace(cell.String())
+		header = strings.Trim(header, `"`)
+		headers[i] = header
 	}
-	return sanitizedHeaders
+	return headers
 }
 
-func excludeColumns(row []string, excludeIndexes []int) []string {
-	var others []string
-	for i, col := range row {
-		if !contains(excludeIndexes, i) {
-			others = append(others, col)
-		}
-	}
-	return others
-}
-
-func GetCSVHeaders(filePath string) ([]string, error) {
-
-	file, err := os.Open(filePath)
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-
-	headers, err := reader.Read()
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	log.Printf("Headers: %v", headers)
-	return headers, nil
-
-}
-
-func getRowData(row *xlsx.Row) []string {
-	var data []string
-	for _, cell := range row.Cells {
-		data = append(data, cell.String())
-	}
-	return data
-}
-
-// GetHeaders reads the headers from a CSV or XLSX file
+// GetHeaders reads the headers from a CSV or XLSX file.
 func GetHeaders(filename string) ([]string, error) {
 	ext := strings.ToLower(filepath.Ext(filename))
-	if ext == ".csv" {
+	switch ext {
+	case ".csv":
 		return getHeadersFromCSV(filename)
-	} else if ext == ".xlsx" {
+	case ".xlsx":
 		return getHeadersFromXLSX(filename)
+	default:
+		return nil, fmt.Errorf("unsupported file type: %s", ext)
 	}
-	return nil, fmt.Errorf("unsupported file type: %s", ext)
 }
 
 func getHeadersFromCSV(filename string) ([]string, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error opening CSV file %s: %v", filename, err)
 	}
 	defer file.Close()
 
@@ -532,9 +403,9 @@ func getHeadersFromCSV(filename string) ([]string, error) {
 	reader.LazyQuotes = true
 	reader.FieldsPerRecord = -1
 
-	row, err := reader.Read() // Read only the first line
+	row, err := reader.Read()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error reading headers from CSV file %s: %v", filename, err)
 	}
 
 	headers := sanitizeHeaders(row)
@@ -544,7 +415,7 @@ func getHeadersFromCSV(filename string) ([]string, error) {
 func getHeadersFromXLSX(filename string) ([]string, error) {
 	file, err := xlsx.OpenFile(filename)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error opening XLSX file %s: %v", filename, err)
 	}
 
 	for _, sheet := range file.Sheets {
@@ -553,24 +424,5 @@ func getHeadersFromXLSX(filename string) ([]string, error) {
 			return headers, nil
 		}
 	}
-	return nil, fmt.Errorf("no headers found in XLSX file")
-}
-
-func getRowDataExcluding(row *xlsx.Row, excludeIndexes []int) []string {
-	var others []string
-	for i, cell := range row.Cells {
-		if !contains(excludeIndexes, i) {
-			others = append(others, cell.String())
-		}
-	}
-	return others
-}
-
-func contains(slice []int, elem int) bool {
-	for _, e := range slice {
-		if e == elem {
-			return true
-		}
-	}
-	return false
+	return nil, fmt.Errorf("no headers found in XLSX file: %s", filename)
 }
